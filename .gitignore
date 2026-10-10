@@ -4,3 +4,8 @@ site_lib
 tmp
 .vscode
 ci/pytest/test-results
+# Docker: variables con contraseñas (usar .env.example como plantilla)
+.env
+# La personalización del repositorio para Docker sí se versiona
+# (la regla "cfg" de arriba la excluiría)
+!docker/archive/overlay/cfg/

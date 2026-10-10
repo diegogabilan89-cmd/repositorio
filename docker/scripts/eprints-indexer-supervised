@@ -1,0 +1,52 @@
+#!/bin/bash
+# =============================================================================
+#  Ejecuta el indexador de EPrints bajo supervisord.
+#
+#  El indexador de EPrints es un demonio propio (bin/indexer start) que escribe
+#  su PID en var/indexer.pid; la pantalla "Admin > Estado" de la web usa ese
+#  archivo para mostrar si está activo. Para no perder esa integración, este
+#  script arranca el demonio oficial, reenvía su log a la salida del contenedor
+#  y vigila que siga vivo:
+#    - si el demonio muere inesperadamente -> sale con 1 (supervisord lo reinicia)
+#    - si se detiene a propósito (desde la web o con `indexer stop`) -> sale con 0
+# =============================================================================
+set -u
+
+EPRINTS_PATH=${EPRINTS_PATH:-/opt/eprints3}
+INDEXER="$EPRINTS_PATH/bin/indexer"
+PIDFILE="$EPRINTS_PATH/var/indexer.pid"
+LOGFILE="$EPRINTS_PATH/var/indexer.log"
+TAIL_PID=""
+
+shutdown() {
+    "$INDEXER" stop --quiet >/dev/null 2>&1
+    [ -n "$TAIL_PID" ] && kill "$TAIL_PID" 2>/dev/null
+    exit 0
+}
+trap shutdown TERM INT
+
+# --force descarta un PID obsoleto de una ejecución anterior del contenedor
+if ! "$INDEXER" start --force --quiet; then
+    echo "[indexer] No se pudo iniciar el indexador de EPrints" >&2
+    exit 1
+fi
+echo "[indexer] Indexador iniciado (PID $(cat "$PIDFILE" 2>/dev/null))"
+
+touch "$LOGFILE"
+tail -n 0 -F "$LOGFILE" 2>/dev/null | sed -u 's/^/[indexer] /' &
+TAIL_PID=$!
+
+while true; do
+    sleep 15 &
+    wait $!
+    if [ ! -f "$PIDFILE" ]; then
+        echo "[indexer] Indexador detenido manualmente"
+        kill "$TAIL_PID" 2>/dev/null
+        exit 0
+    fi
+    if ! kill -0 "$(cat "$PIDFILE" 2>/dev/null)" 2>/dev/null; then
+        echo "[indexer] El indexador terminó inesperadamente" >&2
+        kill "$TAIL_PID" 2>/dev/null
+        exit 1
+    fi
+done

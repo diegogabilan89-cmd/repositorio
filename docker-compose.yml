@@ -1,0 +1,77 @@
+# =============================================================================
+#  Repositorio Digital de Producción Científica e Investigación
+#  Hospital General de Itapúa — EPrints 3.5 con Docker Compose
+#
+#  Servicios:
+#    eprints  -> Apache + mod_perl + EPrints 3.5 (+ indexador)   :EPRINTS_PORT
+#    db       -> MariaDB 11.8 (base de datos, solo red interna)
+#    mailpit  -> captura los correos que envía EPrints            :MAILPIT_PORT
+#
+#  Primer uso:
+#      cp .env.example .env        # y editar contraseñas
+#      docker compose up -d --build
+#      docker compose logs -f eprints
+#  Documentación: docs/DESPLIEGUE_DOCKER.md
+# =============================================================================
+name: repositorio-hgi
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: mariadb:11.8
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?Falta MARIADB_ROOT_PASSWORD en .env}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging: *default-logging
+
+  eprints:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: repositorio-hgi/eprints:3.5
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      EPRINTS_DB_HOST: db
+    ports:
+      # El mismo puerto dentro y fuera: EPrints genera las URL con él.
+      - "${EPRINTS_PORT:-8080}:${EPRINTS_PORT:-8080}"
+    volumes:
+      # Configuración del repositorio, documentos subidos y páginas generadas
+      - eprints_archives:/opt/eprints3/archives
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    logging: *default-logging
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    restart: unless-stopped
+    ports:
+      # Solo accesible desde el propio equipo (en un VPS, usar túnel SSH)
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
+    logging: *default-logging
+
+volumes:
+  db_data:
+  eprints_archives:

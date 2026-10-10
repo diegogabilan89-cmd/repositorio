@@ -1,15 +1,18 @@
+# Los submódulos apuntan a los repositorios oficiales de EPrints en GitHub.
+# (El original usaba rutas relativas "../x.git", que solo funcionan dentro
+# de la organización github.com/eprints y fallan en cualquier fork.)
 [submodule "ingredients/easy_pages"]
 	path = ingredients/easy_pages
-	url = ../easy_pages.git
+	url = https://github.com/eprints/easy_pages.git
 [submodule "ingredients/richtext"]
 	path = ingredients/richtext
-	url = ../richtext.git
+	url = https://github.com/eprints/richtext.git
 [submodule "flavours/pub_lib"]
 	path = flavours/pub_lib
-	url = ../pub_lib.git
+	url = https://github.com/eprints/pub_lib.git
 [submodule "ingredients/latest_additions"]
 	path = ingredients/latest_additions
-	url = ../latest_additions.git
+	url = https://github.com/eprints/latest_additions.git
 [submodule "ci/pytest/random_eprints"]
 	path = ci/pytest/random_eprints
-	url = ../random_eprints.git
+	url = https://github.com/eprints/random_eprints.git

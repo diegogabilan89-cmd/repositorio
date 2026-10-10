@@ -1,0 +1,17 @@
+# Archivos que no se envían al construir la imagen
+.git
+.github
+.env
+.env.*
+!.env.example
+docs
+ci
+*.md
+**/.DS_Store
+**/Thumbs.db
+archives/*
+!archives/.gitignore
+var/*
+!var/.gitignore
+cfg
+perl_lib/EPrints/SystemSettings.pm

@@ -1,0 +1,19 @@
+# Normaliza los finales de línea a LF en todos los sistemas operativos.
+# Imprescindible para que los scripts Perl/Bash funcionen dentro de los
+# contenedores Linux aunque el repositorio se clone desde Windows.
+* text=auto eol=lf
+
+# Binarios: nunca convertir
+*.png  binary
+*.gif  binary
+*.jpg  binary
+*.jpeg binary
+*.ico  binary
+*.xcf  binary
+*.pdf  binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.eot  binary
+*.zip  binary
+*.gz   binary

@@ -1,0 +1,257 @@
+#!/usr/bin/perl
+# =============================================================================
+#  eprints-seed — carga datos de demostración en el repositorio
+#
+#   * Cuentas de usuario con distintos roles:
+#       - editor        (usertype "editor") : revisa y aprueba depósitos
+#       - investigador  (usertype "user")   : deposita documentos
+#     (la cuenta "admin" la crea epadmin al crear el repositorio)
+#   * Tres documentos PDF de prueba, uno por categoría principal:
+#       Investigación, Tesis y Guías Clínicas.
+#
+#  Es idempotente: si un usuario o documento ya existe, no se duplica.
+#
+#  Uso (desde la carpeta del proyecto, en el host):
+#      docker compose exec eprints eprints-seed            # usuarios + PDFs
+#      docker compose exec eprints eprints-seed --users    # solo usuarios
+#      docker compose exec eprints eprints-seed --docs     # solo PDFs
+# =============================================================================
+use strict;
+use warnings;
+use utf8;
+
+# Debe ejecutarse como el usuario 'eprints' (propietario de los archivos).
+# Va en BEGIN porque `use EPrints` comprueba el usuario al compilar.
+BEGIN
+{
+	if( $> == 0 )
+	{
+		exec( 'runuser', '-u', 'eprints', '--', $0, @ARGV ) or die "No se pudo cambiar al usuario eprints: $!\n";
+	}
+}
+
+use lib '/opt/eprints3/perl_lib';
+use EPrints;
+use Getopt::Long;
+
+binmode( STDOUT, ':encoding(UTF-8)' );
+binmode( STDERR, ':encoding(UTF-8)' );
+
+my( $opt_users, $opt_docs, $opt_help );
+GetOptions(
+	'users' => \$opt_users,
+	'docs'  => \$opt_docs,
+	'help'  => \$opt_help,
+) or exit 2;
+if( $opt_help )
+{
+	print "Uso: eprints-seed [--users] [--docs]\n";
+	exit 0;
+}
+my $do_users = $opt_users || !$opt_docs;
+my $do_docs  = $opt_docs  || !$opt_users;
+
+my $archive_id = $ENV{ARCHIVE_ID} || 'hgi';
+my $pdf_dir    = '/opt/eprints-docker/seed/pdfs';
+my $domain     = ( split /@/, ( $ENV{EPRINTS_ADMIN_EMAIL} || 'admin@hgi.localhost' ) )[1];
+
+my $repo = EPrints->new->repository( $archive_id )
+	or die "No se pudo abrir el repositorio '$archive_id'. ¿Terminó de arrancar el contenedor?\n";
+
+# -----------------------------------------------------------------------------
+#  Usuarios
+# -----------------------------------------------------------------------------
+my @USERS = (
+	{
+		username => $ENV{EPRINTS_EDITOR_USER} || 'editor',
+		password => $ENV{EPRINTS_EDITOR_PASSWORD},
+		usertype => 'editor',
+		name     => { given => 'María José', family => 'Benítez' },
+		role     => 'Editor / Revisor',
+	},
+	{
+		username => $ENV{EPRINTS_DEPOSITOR_USER} || 'investigador',
+		password => $ENV{EPRINTS_DEPOSITOR_PASSWORD},
+		usertype => 'user',
+		name     => { given => 'Carlos Andrés', family => 'Ramírez' },
+		role     => 'Depositante (investigador)',
+	},
+);
+
+sub create_users
+{
+	print "== Cuentas de usuario\n";
+	my $ds = $repo->dataset( 'user' );
+
+	# epadmin crea al administrador sin nombre (la web mostraría su correo)
+	my $admin = $repo->user_by_username( $ENV{EPRINTS_ADMIN_USER} || 'admin' );
+	if( $admin && !$admin->is_set( 'name' ) )
+	{
+		$admin->set_value( 'name', { given => 'Administrador', family => 'Repositorio' } );
+		$admin->commit;
+		printf "   * %-14s nombre asignado: Administrador Repositorio\n", $admin->value( 'username' );
+	}
+	foreach my $u ( @USERS )
+	{
+		if( my $existing = $repo->user_by_username( $u->{username} ) )
+		{
+			printf "   - %-14s ya existe (rol: %s)\n", $u->{username}, $existing->value( 'usertype' );
+			next;
+		}
+		if( !defined $u->{password} || length( $u->{password} ) < 8 )
+		{
+			warn "   ! $u->{username}: falta la contraseña (o tiene menos de 8 caracteres) en .env; se omite.\n";
+			next;
+		}
+		my $user = $ds->create_dataobj( {
+			username => $u->{username},
+			password => EPrints::Utils::crypt_password( $u->{password}, $repo ),
+			usertype => $u->{usertype},
+			email    => "$u->{username}\@$domain",
+			name     => $u->{name},
+		} );
+		if( $user )
+		{
+			printf "   + %-14s creado — rol: %s (usertype=%s)\n", $u->{username}, $u->{role}, $u->{usertype};
+		}
+		else
+		{
+			warn "   ! No se pudo crear $u->{username}: ".( $repo->database->error // 'error desconocido' )."\n";
+		}
+	}
+}
+
+# -----------------------------------------------------------------------------
+#  Documentos PDF de prueba (contenido ficticio)
+# -----------------------------------------------------------------------------
+my @DOCS = (
+	{
+		file      => 'investigacion_prevalencia_hipertension_2025.pdf',
+		type      => 'article',
+		title     => 'Prevalencia de hipertensión arterial y factores de riesgo asociados en pacientes adultos de consultorio externo (documento de prueba)',
+		abstract  => 'Estudio observacional, descriptivo y de corte transversal con datos simulados. Se describe la prevalencia de hipertensión arterial y su asociación con obesidad, sedentarismo y tabaquismo en una muestra ficticia de 412 pacientes adultos atendidos en consultorio externo. DOCUMENTO DE PRUEBA: el contenido es ficticio y tiene fines exclusivamente académicos.',
+		keywords  => 'hipertensión arterial, prevalencia, factores de riesgo, atención ambulatoria',
+		creators  => [
+			{ name => { family => 'Martínez', given => 'Ana Lucía' } },
+			{ name => { family => 'Ramírez',  given => 'Carlos Andrés' } },
+		],
+		subjects  => [ 'inv_epidemiologia', 'inv_clinica' ],
+		divisions => [ 'srv_medicina_interna' ],
+		date      => '2025-11-20',
+		date_type => 'completed',
+		ispublished => 'unpub',
+		pages     => 2,
+	},
+	{
+		file      => 'tesis_adherencia_lactancia_materna.pdf',
+		type      => 'thesis',
+		title     => 'Factores asociados a la adherencia a la lactancia materna exclusiva en puérperas atendidas en el Servicio de Pediatría (documento de prueba)',
+		abstract  => 'Tesis de especialización ficticia. Plantea un estudio analítico para identificar factores sociodemográficos y de atención sanitaria asociados a la adherencia a la lactancia materna exclusiva durante los primeros seis meses. DOCUMENTO DE PRUEBA: el contenido es ficticio y tiene fines exclusivamente académicos.',
+		keywords  => 'lactancia materna exclusiva, adherencia, puerperio, pediatría',
+		creators  => [
+			{ name => { family => 'Gómez', given => 'Laura Beatriz' } },
+		],
+		subjects  => [ 'tesis_especializacion' ],
+		divisions => [ 'srv_pediatria', 'dep_docencia' ],
+		date      => '2026-02-10',
+		date_type => 'completed',
+		thesis_type => 'other',
+		institution => 'Hospital General de Itapúa',
+		department  => 'Servicio de Pediatría — Residencia Médica',
+		pages     => 2,
+	},
+	{
+		file      => 'guia_manejo_inicial_sepsis_urgencias.pdf',
+		type      => 'monograph',
+		title     => 'Guía de práctica clínica: reconocimiento y manejo inicial de la sepsis en el Servicio de Urgencias (documento de prueba)',
+		abstract  => 'Guía clínica de ejemplo que resume, a nivel general, los pasos de reconocimiento temprano, evaluación inicial, toma de muestras, tratamiento precoz y reevaluación del paciente con sospecha de sepsis en urgencias. DOCUMENTO DE PRUEBA: no debe utilizarse para decisiones clínicas.',
+		keywords  => 'sepsis, urgencias, guía de práctica clínica, protocolo',
+		creators  => [
+			{ name => { family => 'Villalba', given => 'Ricardo' } },
+			{ name => { family => 'Benítez',  given => 'María José' } },
+		],
+		subjects  => [ 'guias_gpc', 'guias_protocolos' ],
+		divisions => [ 'srv_urgencias', 'srv_uti' ],
+		date      => '2026-05-04',
+		date_type => 'published',
+		monograph_type => 'manual',
+		publisher => 'Hospital General de Itapúa',
+		place_of_pub => 'Itapúa, Paraguay',
+		ispublished => 'pub',
+		pages     => 2,
+	},
+);
+
+sub create_docs
+{
+	print "== Documentos PDF de prueba\n";
+
+	my $owner = $repo->user_by_username( $ENV{EPRINTS_DEPOSITOR_USER} || 'investigador' )
+		|| $repo->user_by_username( $ENV{EPRINTS_ADMIN_USER} || 'admin' )
+		or die "No hay un usuario al que asignar los documentos.\n";
+
+	my $eprint_ds = $repo->dataset( 'eprint' );
+
+	foreach my $d ( @DOCS )
+	{
+		my %meta = %$d;
+		my $file = delete $meta{file};
+		my $path = "$pdf_dir/$file";
+
+		my $found = $eprint_ds->search( filters => [
+			{ meta_fields => [ 'title' ], value => $meta{title}, match => 'EX' },
+		] );
+		if( $found->count > 0 )
+		{
+			printf "   - %-48s ya existe (id %s)\n", $file, $found->item( 0 )->id;
+			next;
+		}
+		if( !-f $path )
+		{
+			warn "   ! No se encontró $path; se omite.\n";
+			next;
+		}
+
+		open( my $fh, '<:raw', $path ) or die "No se pudo abrir $path: $!\n";
+
+		my $eprint = $repo->dataset( 'inbox' )->create_dataobj( {
+			%meta,
+			eprint_status => 'inbox',
+			userid        => $owner->id,
+			documents     => [ {
+				format    => 'text',
+				mime_type => 'application/pdf',
+				language  => 'es',
+				security  => 'public',
+				license   => 'cc_by_nc_4',
+				main      => $file,
+				files     => [ {
+					filename  => $file,
+					filesize  => -s $path,
+					mime_type => 'application/pdf',
+					_content  => $fh,
+				} ],
+			} ],
+		} );
+		close( $fh );
+
+		if( !$eprint )
+		{
+			warn "   ! No se pudo crear el registro para $file\n";
+			next;
+		}
+
+		# Pasa el registro del "inbox" del usuario al archivo público (live)
+		$eprint->move_to_archive;
+		printf "   + %-48s publicado (id %s) — %s\n", $file, $eprint->id, $eprint->get_url;
+	}
+
+	# Actualiza las vistas "Navegar por año / categoría / servicio"
+	print "== Regenerando vistas de navegación...\n";
+	system( '/opt/eprints3/bin/generate_views', '--quiet', $archive_id );
+	print "   El indexador procesará el texto completo y las miniaturas en 1-2 minutos.\n";
+}
+
+create_users() if $do_users;
+create_docs()  if $do_docs;
+print "Listo.\n";

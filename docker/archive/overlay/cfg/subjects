@@ -1,0 +1,54 @@
+# =============================================================================
+#  Categorías del Repositorio Digital del Hospital General de Itapúa
+#
+#  Formato:  ID:TÍTULO:ID_PADRE:SE_PUEDE_ASIGNAR(1/0)
+#  Se importan al crear el repositorio con:
+#      bin/import_subjects --force <ARCHIVE_ID>
+#  Después se pueden editar desde la web: Admin > Editar categorías (Subjects).
+#
+#  "subjects"  -> campo "Subjects" (Áreas temáticas) del formulario de depósito
+#  "divisions" -> campo "Divisions" (Servicio / departamento de origen)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+#  ÁREAS TEMÁTICAS (categorías principales solicitadas)
+# -----------------------------------------------------------------------------
+subjects:Áreas Temáticas:ROOT:0
+
+investigacion:Investigación:subjects:1
+inv_clinica:Investigación Clínica:investigacion:1
+inv_epidemiologia:Epidemiología y Salud Pública:investigacion:1
+inv_biomedica:Ciencias Biomédicas Básicas:investigacion:1
+inv_enfermeria:Investigación en Enfermería:investigacion:1
+inv_casos:Reportes de Casos Clínicos:investigacion:1
+
+tesis:Tesis:subjects:1
+tesis_grado:Tesis de Grado:tesis:1
+tesis_especializacion:Tesis de Especialización y Residencia Médica:tesis:1
+tesis_maestria:Tesis de Maestría:tesis:1
+tesis_doctorado:Tesis Doctoral:tesis:1
+
+guias:Guías Clínicas:subjects:1
+guias_gpc:Guías de Práctica Clínica:guias:1
+guias_protocolos:Protocolos de Atención:guias:1
+guias_procedimientos:Manuales de Procedimientos:guias:1
+guias_enfermeria:Guías de Cuidados de Enfermería:guias:1
+
+# -----------------------------------------------------------------------------
+#  ESTRUCTURA DEL HOSPITAL (servicio o departamento que origina el documento)
+# -----------------------------------------------------------------------------
+divisions:Estructura del Hospital:ROOT:0
+
+dir_medica:Dirección Médica:divisions:0
+dep_docencia:Departamento de Docencia e Investigación:dir_medica:1
+srv_medicina_interna:Servicio de Medicina Interna:dir_medica:1
+srv_cirugia:Servicio de Cirugía General:dir_medica:1
+srv_pediatria:Servicio de Pediatría:dir_medica:1
+srv_gineco:Servicio de Ginecología y Obstetricia:dir_medica:1
+srv_urgencias:Servicio de Urgencias:dir_medica:1
+srv_uti:Unidad de Terapia Intensiva:dir_medica:1
+srv_laboratorio:Laboratorio Clínico:dir_medica:1
+srv_imagenes:Servicio de Diagnóstico por Imágenes:dir_medica:1
+
+dir_enfermeria:Dirección de Enfermería:divisions:0
+dep_enfermeria:Departamento de Enfermería:dir_enfermeria:1

@@ -1,0 +1,43 @@
+# =============================================================================
+#  Plantilla para `epadmin create --config=...`
+#  docker-entrypoint.sh la completa con los valores del archivo .env (envsubst)
+#  la primera vez que arranca el contenedor. El archivo resultante contiene
+#  contraseñas: se crea en /tmp y se borra inmediatamente después de usarlo.
+# =============================================================================
+flavour: 'pub'
+archive_id: '${ARCHIVE_ID}'
+core:
+  host: '${EPRINTS_HOSTNAME}'
+  port: '${EPRINTS_PORT}'
+  aliases: []
+  path: '/'
+  securehost: ''
+  secureport: 443
+  adminemail: '${EPRINTS_ADMIN_EMAIL}'
+  phrases:
+    # Nombres provisionales en ASCII: epadmin escribe este archivo en
+    # ISO-8859-1. El nombre definitivo (con tildes) lo escribe el entrypoint
+    # en UTF-8 a partir de EPRINTS_ARCHIVE_NAME y EPRINTS_ORG_NAME.
+    archive_name: 'Repositorio Digital'
+    organisation_name: 'Hospital General de Itapua'
+database:
+  dbname: '${ARCHIVE_ID}'
+  dbhost: '${EPRINTS_DB_HOST}'
+  dbport: '#'
+  dbsock: '#'
+  dbuser: '${EPRINTS_DB_USER}'
+  dbpass: '${EPRINTS_DB_PASSWORD}'
+  dbengine: 'InnoDB'
+  dbcharset: 'utf8mb4'
+  admin:
+    username: 'root'
+    password: '${MARIADB_ROOT_PASSWORD}'
+user:
+  username: '${EPRINTS_ADMIN_USER}'
+  usertype: 'admin'
+  password: '${EPRINTS_ADMIN_PASSWORD}'
+  email: '${EPRINTS_ADMIN_EMAIL}'
+generate_static: 'yes'
+# Las categorías médicas se importan después desde overlay/cfg/subjects
+import_subjects: 'no'
+generate_apacheconf: 'yes'
